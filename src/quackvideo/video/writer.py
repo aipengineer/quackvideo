@@ -1,4 +1,4 @@
-# src/reelpy/video/writer.py
+# src/quackvideo/video/writer.py
 from __future__ import annotations
 
 import subprocess

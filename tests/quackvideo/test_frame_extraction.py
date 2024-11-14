@@ -54,7 +54,7 @@ class TestFrameExtraction:
         """Test keyframe extraction."""
         mock_run, mock_popen = mock_ffmpeg_setup
 
-        with patch('reelpy.video.reader.VideoReader._load_metadata', return_value=video_metadata):
+        with patch('quackvideo.video.reader.VideoReader._load_metadata', return_value=video_metadata):
             logger.debug("Starting keyframe extraction")
             reader = VideoReader("test.mp4", skip_validation=True)
             keyframes = list(reader.extract_keyframes())
@@ -72,7 +72,7 @@ class TestFrameExtraction:
         """Test scene change detection."""
         mock_run, mock_popen = mock_ffmpeg_setup
 
-        with patch('reelpy.video.reader.VideoReader._load_metadata', return_value=video_metadata):
+        with patch('quackvideo.video.reader.VideoReader._load_metadata', return_value=video_metadata):
             reader = VideoReader("test.mp4", skip_validation=True)
             scenes = list(reader.extract_scene_changes(threshold=0.3))
 
@@ -85,7 +85,7 @@ class TestFrameExtraction:
         """Test frame sequence extraction."""
         mock_run, mock_popen = mock_ffmpeg_setup
 
-        with patch('reelpy.video.reader.VideoReader._load_metadata', return_value=video_metadata):
+        with patch('quackvideo.video.reader.VideoReader._load_metadata', return_value=video_metadata):
             reader = VideoReader("test.mp4", skip_validation=True)
 
             def test_sequence(timestamp: float, count: int, direction: str, expected_times: list[float]):

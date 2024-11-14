@@ -1,4 +1,4 @@
-# src/reelpy/core/utils.py
+# src/quackvideo/core/utils.py
 from typing import Iterator, Tuple
 import numpy as np
 

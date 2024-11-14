@@ -1,11 +1,11 @@
-# ReelPy
+# QuackVideo
 
 **Work In Progress**
 
-**ReelPy** is a modern Python library designed to simplify video editing by combining the power of FFmpeg with an easy-to-use, Pythonic API. Whether you’re editing small clips or working on complex video projects, ReelPy provides a high-performance, flexible solution for Python developers.
+**QuackVideo** is a modern Python library designed to simplify video editing by combining the power of FFmpeg with an easy-to-use, Pythonic API. Whether you’re editing small clips or working on complex video projects, QuackVideo provides a high-performance, flexible solution for Python developers.
 
 ## Features
-- **High Performance**: Built on FFmpeg, ReelPy ensures fast video processing with minimal re-encoding.
+- **High Performance**: Built on FFmpeg, QuackVideo ensures fast video processing with minimal re-encoding.
 - **Pythonic API**: Intuitive and easy-to-use, allowing you to handle video processing with minimal code.
 - **Seamless Migration from MoviePy**: Designed to maintain feature parity with MoviePy, making it easy for existing users to switch.
 - **Parallel Processing**: Leverage parallelism to speed up rendering and encoding tasks.
@@ -13,18 +13,18 @@
 
 ## Installation
 
-You can install **ReelPy** via pip:
+You can install **QuackVideo** via pip:
 
 ```bash
-pip install reelpy
+pip install quackvideo
 ```
 
 ## Quickstart
 
-Here’s a simple example of how to use **ReelPy** to load a video, trim it, and save the output:
+Here’s a simple example of how to use **QuackVideo** to load a video, trim it, and save the output:
 
 ```python
-from reelpy import VideoFileClip
+from quackvideo import VideoFileClip
 
 # Load a video file
 clip = VideoFileClip("my_video.mp4")
@@ -44,12 +44,12 @@ trimmed_clip.write_videofile("output.mp4")
 
 ## Migration from MoviePy
 
-If you are familiar with MoviePy, transitioning to ReelPy will be easy. The API is designed to be compatible with MoviePy, with additional enhancements for performance and usability. Check out the Migration Guide (Coming Soon) for a detailed comparison.
+If you are familiar with MoviePy, transitioning to QuackVideo will be easy. The API is designed to be compatible with MoviePy, with additional enhancements for performance and usability. Check out the Migration Guide (Coming Soon) for a detailed comparison.
 
 ## Contributing
 
-We welcome contributions from the community! Feel free to open issues or submit pull requests to help improve ReelPy. Please read the Contributing Guide (Coming Soon) to get started.
+We welcome contributions from the community! Feel free to open issues or submit pull requests to help improve QuackVideo. Please read the Contributing Guide (Coming Soon) to get started.
 
 ## License
 
-ReelPy is licensed under the MIT License. See [LICENSE](LICENSE) for more details.
+QuackVideo is licensed under the AGPL-3.0 License. See [LICENSE](LICENSE) for more details.

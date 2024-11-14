@@ -1,4 +1,4 @@
-# src/reelpy/video/reader.py
+# src/quackvideo/video/reader.py
 from __future__ import annotations
 
 import json

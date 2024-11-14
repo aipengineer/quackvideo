@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 import numpy as np
 
-from reelpy.core.ffmpeg import FFmpegCommand, FFmpegWrapper, FFmpegTimeoutError
+from quackvideo.core.ffmpeg import FFmpegCommand, FFmpegWrapper, FFmpegTimeoutError
 
 @pytest.fixture
 def sample_video(tmp_path) -> Path:
@@ -92,7 +92,7 @@ class TestFFmpegWrapper:
             mock_process.poll.return_value = 0
             mock_popen.return_value = mock_process
             
-            with patch('reelpy.core.ffmpeg.FFmpegWrapper.get_video_info', return_value=(320, 240)):
+            with patch('quackvideo.core.ffmpeg.FFmpegWrapper.get_video_info', return_value=(320, 240)):
                 frames = list(FFmpegWrapper.extract_frames(sample_video, fps=1))
                 assert len(frames) == 3
     
@@ -109,7 +109,7 @@ class TestFFmpegWrapper:
             assert frame.shape == (target_height, target_width, 3)
     
     @patch('subprocess.Popen')
-    @patch('reelpy.core.ffmpeg.FFmpegWrapper.get_video_info')
+    @patch('quackvideo.core.ffmpeg.FFmpegWrapper.get_video_info')
     def test_ffmpeg_error_handling(self, mock_get_info, mock_popen, sample_video):
         """Test error handling when FFmpeg process fails."""
         # Mock video info

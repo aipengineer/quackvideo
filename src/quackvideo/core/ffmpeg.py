@@ -1,4 +1,4 @@
-# src/reelpy/core/ffmpeg.py
+# src/quackvideo/core/ffmpeg.py
 from __future__ import annotations
 
 import json

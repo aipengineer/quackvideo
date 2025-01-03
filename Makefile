@@ -66,3 +66,23 @@ setup-inference: clean install ## Setup for inference only
 
 setup-training: clean install-train ## Setup for training
 	@echo "Training environment ready!"
+
+.PHONY: structure
+structure: ## Show current project structure
+	@echo "${YELLOW}Current Project Structure:${RESET}"
+	@echo "${BLUE}"
+	@if command -v tree > /dev/null; then \
+		tree -a -I '.git|.venv|__pycache__|*.pyc|*.pyo|*.pyd|.pytest_cache|.ruff_cache|.coverage|htmlcov'; \
+	else \
+		echo "Note: Install 'tree' for better directory visualization:"; \
+		echo "  macOS:     brew install tree"; \
+		echo "  Ubuntu:    sudo apt-get install tree"; \
+		echo "  Fedora:    sudo dnf install tree"; \
+		echo ""; \
+		find . -not -path '*/\.*' -not -path '*.pyc' -not -path '*/__pycache__/*' \
+			-not -path './.venv/*' -not -path './build/*' -not -path './dist/*' \
+			-not -path './*.egg-info/*' \
+			| sort \
+			| sed -e "s/[^-][^\/]*\// │   /g" -e "s/├── /│── /" -e "s/└── /└── /"; \
+	fi
+	@echo "${RESET}"

@@ -1,5 +1,5 @@
 [project]
-name = "ReelPy"
+name = "Quackvideo"
 version = "0.1.0"
 description = "A modern, high-performance Python video editing library built on FFmpeg. Simplify video manipulation with an intuitive, Pythonic API, designed for speed and ease of use."
 requires-python = ">=3.10"
@@ -10,6 +10,10 @@ dependencies = [
     "pillow>=10.0.0",
     "onnxruntime>=1.15.0",
     "insightface>=0.7.3",
+    "ffmpeg-python>=0.2.0",
+    "tqdm>=4.66.1",
+    "pyyaml>=6.0.1",
+    "fire>=0.5.0",
 ]
 
 [project.optional-dependencies]

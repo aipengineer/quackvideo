@@ -2,14 +2,15 @@
 name = "Quackvideo"
 version = "0.1.0"
 description = "A modern, high-performance Python video editing library built on FFmpeg. Simplify video manipulation with an intuitive, Pythonic API, designed for speed and ease of use."
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
+
+# Core dependencies that any user of the library needs
 dependencies = [
     "numpy>=1.24.0",
     "opencv-python>=4.8.0",
     "pydantic>=2.6.0",
     "pillow>=10.0.0",
     "onnxruntime>=1.15.0",
-    #"insightface>=0.7.3",
     "ffmpeg-python>=0.2.0",
     "tqdm>=4.66.1",
     "pyyaml>=6.0.1",
@@ -17,13 +18,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-train = [
+# For users who want to use advanced ML features
+ml = [
     "torch",
     "torchvision",
     "scikit-learn>=1.3.0",
     "pandas>=2.0.0",
     "matplotlib>=3.7.0",
 ]
+
+# For library developers - all tools needed for development
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.1.0",
@@ -34,8 +38,31 @@ dev = [
     "notebook>=7.0.0",
     "pytest-timeout",
 ]
+
+# For users who want all features (but not dev tools)
+full = [
+    "torch",
+    "torchvision",
+    "scikit-learn>=1.3.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.7.0",
+]
+
+# For developers who want everything
 all = [
-    "face-classifier[train,dev]"
+    "torch",
+    "torchvision",
+    "scikit-learn>=1.3.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.7.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+    "black>=24.1.0",
+    "ipykernel>=6.0.0",
+    "notebook>=7.0.0",
+    "pytest-timeout",
 ]
 
 [build-system]
@@ -44,7 +71,7 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [

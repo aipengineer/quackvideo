@@ -14,8 +14,9 @@ Each script can be run directly with Python using the Fire CLI interface. For ex
 
 ```bash
 # Generate synthetic patterns
-python synthetic_generation.py video --pattern color_bars --duration 10
-python synthetic_generation.py audio --pattern sine --frequency 440
+python synthetic_generation.py video video.mp4 --pattern color_bars --duration 10
+python synthetic_generation.py audio audio1.flac --pattern sine --frequency 440
+python synthetic_generation.py audio audio2.flac --pattern chirp --frequency 440
 
 # Extract frames
 python frame_extraction.py extract video.mp4 --fps "1/5"

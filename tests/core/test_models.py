@@ -11,8 +11,9 @@ from quackvideo.core.operations.models import (
     AudioConfig,
     OutputMetadata,
     ProcessingMetadata,
-    FFmpegProcessingConfig
+    FFmpegProcessingConfig,
 )
+
 
 class TestMediaType:
     def test_media_types(self):
@@ -20,6 +21,7 @@ class TestMediaType:
         assert MediaType.VIDEO.value == "video"
         assert MediaType.AUDIO.value == "audio"
         assert len(MediaType) == 2
+
 
 class TestFFmpegBaseConfig:
     def test_default_values(self):
@@ -33,12 +35,13 @@ class TestFFmpegBaseConfig:
         """Test configuration validation."""
         with pytest.raises(ValidationError):
             FFmpegBaseConfig(timeout=-1)
-        
+
         with pytest.raises(ValidationError):
             FFmpegBaseConfig(retries=0)
-        
+
         with pytest.raises(ValidationError):
             FFmpegBaseConfig(retry_delay=-1.0)
+
 
 class TestFrameExtractionConfig:
     def test_default_values(self):
@@ -48,36 +51,36 @@ class TestFrameExtractionConfig:
         assert config.format == "png"
         assert config.quality == 100
 
-    @pytest.mark.parametrize("fps", [
-        "1/1",
-        "1/30",
-        "24/1",
-        "30/1",
-        "60/1"
-    ])
+    @pytest.mark.parametrize("fps", ["1/1", "1/30", "24/1", "30/1", "60/1"])
     def test_valid_fps_values(self, fps):
         """Test valid FPS specifications."""
         config = FrameExtractionConfig(fps=fps)
         assert config.fps == fps
 
-    @pytest.mark.parametrize("invalid_fps", [
-        "0/1",
-        "1/0",
-        "-1/1",
-        "invalid",
-        "30",
-    ])
+    @pytest.mark.parametrize(
+        "invalid_fps",
+        [
+            "0/1",
+            "1/0",
+            "-1/1",
+            "invalid",
+            "30",
+        ],
+    )
     def test_invalid_fps_values(self, invalid_fps):
         """Test invalid FPS specifications."""
         with pytest.raises(ValidationError):
             FrameExtractionConfig(fps=invalid_fps)
 
-    @pytest.mark.parametrize("format,quality", [
-        ("png", 100),
-        ("jpg", 90),
-        ("jpeg", 75),
-        ("png", 50),
-    ])
+    @pytest.mark.parametrize(
+        "format,quality",
+        [
+            ("png", 100),
+            ("jpg", 90),
+            ("jpeg", 75),
+            ("png", 50),
+        ],
+    )
     def test_format_quality_combinations(self, format, quality):
         """Test various format and quality combinations."""
         config = FrameExtractionConfig(format=format, quality=quality)
@@ -90,6 +93,7 @@ class TestFrameExtractionConfig:
             FrameExtractionConfig(quality=101)
         with pytest.raises(ValidationError):
             FrameExtractionConfig(quality=0)
+
 
 class TestAudioConfig:
     def test_default_values(self):
@@ -121,13 +125,14 @@ class TestAudioConfig:
         with pytest.raises(ValidationError):
             AudioConfig(mixing_volumes=[0.5])  # Wrong length
 
+
 class TestOutputMetadata:
     def test_metadata_creation(self):
         """Test output metadata creation."""
         metadata = OutputMetadata(
             original_filename="test.mp4",
             operation_type="frame_extraction",
-            output_path=Path("/tmp/output")
+            output_path=Path("/tmp/output"),
         )
         assert isinstance(metadata.timestamp, datetime)
         assert metadata.original_filename == "test.mp4"
@@ -138,12 +143,13 @@ class TestOutputMetadata:
         metadata = OutputMetadata(
             original_filename="test video.mp4",
             operation_type="frame_extraction",
-            output_path=Path("/tmp/output")
+            output_path=Path("/tmp/output"),
         )
         filename = metadata.filename
         assert isinstance(filename, str)
         assert "test%20video.mp4" in filename
         assert metadata.timestamp.strftime("%Y-%m-%d") in filename
+
 
 class TestProcessingMetadata:
     def test_default_values(self):
@@ -158,10 +164,10 @@ class TestProcessingMetadata:
         """Test frame tracking validation."""
         metadata = ProcessingMetadata(total_frames=10)
         assert metadata.total_frames == 10
-        
+
         metadata.completed_frames = 5
         assert metadata.completed_frames == 5
-        
+
         with pytest.raises(ValidationError):
             metadata.completed_frames = 11  # Can't complete more than total
 
@@ -170,9 +176,10 @@ class TestProcessingMetadata:
         metadata = ProcessingMetadata()
         metadata.frame_integrity["frame_001.png"] = "hash1"
         metadata.frame_integrity["frame_002.png"] = "hash2"
-        
+
         assert len(metadata.frame_integrity) == 2
         assert metadata.frame_integrity["frame_001.png"] == "hash1"
+
 
 class TestFFmpegProcessingConfig:
     def test_default_values(self):
@@ -186,18 +193,18 @@ class TestFFmpegProcessingConfig:
         """Test format compatibility validation."""
         with pytest.raises(ValidationError):
             FFmpegProcessingConfig(compatible_formats={"video": []})
-        
+
         with pytest.raises(ValidationError):
             FFmpegProcessingConfig(compatible_formats={})
 
     def test_format_compatibility(self):
         """Test format compatibility checking."""
         config = FFmpegProcessingConfig()
-        
+
         # Video formats
         assert ".mp4" in config.compatible_formats["video"]
         assert ".mov" in config.compatible_formats["video"]
-        
+
         # Audio formats
         assert ".wav" in config.compatible_formats["audio"]
         assert ".flac" in config.compatible_formats["audio"]
@@ -205,11 +212,11 @@ class TestFFmpegProcessingConfig:
     def test_config_updating(self):
         """Test configuration updating."""
         config = FFmpegProcessingConfig()
-        
+
         # Update frame extraction settings
         config.frame_extraction.fps = "1/1"
         assert config.frame_extraction.fps == "1/1"
-        
+
         # Update audio settings
         config.audio.format = "wav"
         assert config.audio.format == "wav"

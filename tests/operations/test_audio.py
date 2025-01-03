@@ -2,14 +2,17 @@
 import pytest
 from pathlib import Path
 from unittest.mock import patch
+import logging
+import json
 
 from quackvideo.core.operations.audio import (
     AudioProcessor,
     AudioConfig,
     AudioOperationType,
     AudioOperationResult,
-    FFmpegOperationError
+    FFmpegOperationError,
 )
+
 
 class TestAudioProcessor:
     """Test suite for AudioProcessor operations."""
@@ -18,7 +21,7 @@ class TestAudioProcessor:
         """Test AudioProcessor initialization."""
         config = AudioConfig()
         processor = AudioProcessor(config, temp_media_dir)
-        
+
         assert processor.config == config
         assert (processor.episode_dir / "audio").exists()
         assert isinstance(processor.logger, logging.Logger)
@@ -31,7 +34,7 @@ class TestAudioProcessor:
             config = AudioConfig(format="flac")
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.extract_audio(test_video)
-            
+
             assert isinstance(result, AudioOperationResult)
             assert result.operation_type == AudioOperationType.EXTRACT
             assert result.output_path.exists()
@@ -45,7 +48,7 @@ class TestAudioProcessor:
             config = AudioConfig(format=output_format)
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.extract_audio(test_video)
-            
+
             assert result.format == output_format
             assert result.output_path.suffix == f".{output_format}"
 
@@ -53,7 +56,7 @@ class TestAudioProcessor:
             """Test extraction with invalid input."""
             config = AudioConfig()
             processor = AudioProcessor(config, temp_media_dir)
-            
+
             with pytest.raises(FileNotFoundError):
                 processor.extract_audio(Path("nonexistent.mp4"))
 
@@ -65,21 +68,20 @@ class TestAudioProcessor:
             config = AudioConfig(format="wav")
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.convert_audio(test_audio)
-            
+
             assert result.operation_type == AudioOperationType.CONVERT
             assert result.output_path.exists()
             assert result.format == "wav"
 
         @pytest.mark.parametrize("compression_level", [5, 8, 12])
-        def test_compression_levels(self, test_audio, temp_media_dir, compression_level):
+        def test_compression_levels(
+            self, test_audio, temp_media_dir, compression_level
+        ):
             """Test conversion with different compression levels."""
-            config = AudioConfig(
-                format="flac",
-                compression_level=compression_level
-            )
+            config = AudioConfig(format="flac", compression_level=compression_level)
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.convert_audio(test_audio)
-            
+
             assert result.output_path.exists()
 
     class TestAudioMixing:
@@ -90,34 +92,30 @@ class TestAudioProcessor:
             config = AudioConfig()
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.mix_audio(*mixed_audio_files)
-            
+
             assert result.operation_type == AudioOperationType.MIX
             assert result.output_path.exists()
             assert result.channels == 2
 
-        @pytest.mark.parametrize("volumes", [
-            [0.5, 0.5],
-            [0.8, 0.2],
-            [0.2, 0.8],
-            [1.0, 0.0],
-            [0.0, 1.0]
-        ])
+        @pytest.mark.parametrize(
+            "volumes", [[0.5, 0.5], [0.8, 0.2], [0.2, 0.8], [1.0, 0.0], [0.0, 1.0]]
+        )
         def test_mixing_volumes(self, mixed_audio_files, temp_media_dir, volumes):
             """Test mixing with different volume levels."""
             config = AudioConfig(mixing_volumes=volumes)
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.mix_audio(*mixed_audio_files, volumes=volumes)
-            
+
             assert result.output_path.exists()
 
         def test_invalid_mixing_params(self, mixed_audio_files, temp_media_dir):
             """Test mixing with invalid parameters."""
             config = AudioConfig()
             processor = AudioProcessor(config, temp_media_dir)
-            
+
             with pytest.raises(ValueError):
                 processor.mix_audio(*mixed_audio_files, volumes=[1.5, 0.5])
-            
+
             with pytest.raises(ValueError):
                 processor.mix_audio(*mixed_audio_files, volumes=[0.5])
 
@@ -128,8 +126,8 @@ class TestAudioProcessor:
             """Test retry mechanism for failed operations."""
             config = AudioConfig(retries=3, retry_delay=0.1)
             processor = AudioProcessor(config, temp_media_dir)
-            
-            with patch('ffmpeg.run', side_effect=ffmpeg.Error("Error")):
+
+            with patch("ffmpeg.run", side_effect=ffmpeg.Error("Error")):
                 with pytest.raises(FFmpegOperationError):
                     processor.convert_audio(test_audio)
 
@@ -137,13 +135,13 @@ class TestAudioProcessor:
             """Test proper resource cleanup after operations."""
             config = AudioConfig()
             processor = AudioProcessor(config, temp_media_dir)
-            
-            with patch('ffmpeg.run') as mock_run:
+
+            with patch("ffmpeg.run") as mock_run:
                 try:
                     processor.convert_audio(test_audio)
                 except:
                     pass
-                
+
                 # Verify cleanup was attempted
                 mock_run.assert_called()
 
@@ -155,10 +153,10 @@ class TestAudioProcessor:
             config = AudioConfig()
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.convert_audio(test_audio)
-            
+
             metadata_file = temp_media_dir / ".metadata.json"
             assert metadata_file.exists()
-            
+
             metadata = json.loads(metadata_file.read_text())
             assert metadata["status"] == "completed"
             assert metadata["last_processed"] is not None
@@ -168,7 +166,7 @@ class TestAudioProcessor:
             config = AudioConfig()
             processor = AudioProcessor(config, temp_media_dir)
             result = processor.convert_audio(test_audio)
-            
+
             # Verify hash exists and is consistent
             assert len(result.file_hash) == 64  # SHA-256 length
             new_hash = processor._calculate_file_hash(result.output_path)

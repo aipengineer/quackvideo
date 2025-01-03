@@ -76,6 +76,40 @@ clean: ## Clean build artifacts and cache
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
+.PHONY: pre-commit
+pre-commit: format lint test clean-all ## Prepare for commit by formatting, linting, testing, and cleaning
+	@echo "${BLUE}Running pre-commit checks...${RESET}"
+	@echo "${GREEN}✓${RESET} Format check passed"
+	@echo "${GREEN}✓${RESET} Lint check passed"
+	@echo "${GREEN}✓${RESET} Tests passed"
+	@echo "${GREEN}✓${RESET} Project cleaned"
+	@echo "${GREEN}✓${RESET} Ready to commit!"
+
+.PHONY: clean-all
+clean-all: clean ## Deep clean including all generated and cache files
+	@echo "${BLUE}Deep cleaning project...${RESET}"
+	rm -rf .pytest_cache/ .coverage htmlcov/ .tox/ .ruff_cache/
+	rm -rf .mypy_cache/ .hypothesis/ .benchmarks/
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyo" -delete
+	find . -type f -name "*.pyd" -delete
+	find . -type f -name ".coverage" -delete
+	find . -type f -name "coverage.xml" -delete
+	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name ".DS_Store" -delete
+	@echo "${GREEN}✓${RESET} Project cleaned successfully"
+
+.PHONY: setup-git-hooks
+setup-git-hooks: ## Set up git hooks to run pre-commit automatically
+	@echo "${BLUE}Setting up git hooks...${RESET}"
+	@mkdir -p .git/hooks
+	@echo '#!/bin/sh' > .git/hooks/pre-commit
+	@echo 'make pre-commit' >> .git/hooks/pre-commit
+	@echo 'make clean-all' >> .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "${GREEN}✓${RESET} Git hooks installed successfully"
+
 .PHONY: update
 update: ## Update all dependencies
 	@echo "${BLUE}Updating dependencies...${RESET}"

@@ -20,7 +20,7 @@ def generate_video(
 ) -> None:
     """
     Generate synthetic video pattern.
-    
+
     Args:
         output_path: Path to save the video
         pattern: Pattern type (color_bars, gradient, checkerboard, moving_box, pulse)
@@ -62,7 +62,7 @@ def generate_audio(
 ) -> None:
     """
     Generate synthetic audio pattern.
-    
+
     Args:
         output_path: Path to save the audio
         pattern: Pattern type (sine, white_noise, frequency_sweep, chirp, pure_tone, multi_tone)
@@ -96,10 +96,12 @@ def generate_audio(
 
 def main() -> None:
     """Main entry point for synthetic media generation."""
-    fire.Fire({
-        "video": generate_video,
-        "audio": generate_audio,
-    })
+    fire.Fire(
+        {
+            "video": generate_video,
+            "audio": generate_audio,
+        }
+    )
 
 
 if __name__ == "__main__":

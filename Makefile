@@ -1,88 +1,117 @@
-.PHONY: help install install-dev install-all test lint format clean build dev doc
+# Terminal colors
+GREEN  := $(shell tput -Txterm setaf 2)
+YELLOW := $(shell tput -Txterm setaf 3)
+WHITE  := $(shell tput -Txterm setaf 7)
+RESET  := $(shell tput -Txterm sgr0)
+BLUE   := $(shell tput -Txterm setaf 4)
 
-PYTHON := python3.10
-VENV := .venv
-BIN := $(VENV)/bin
+# Project settings
+PYTHON_VERSION := 3.10
+VENV_NAME := .venv
+PYTHON := $(VENV_NAME)/bin/python
+PROJECT_NAME := quackvideo
 
-help:  ## Show this help message
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+# Test settings
+TEST_PATH := tests/
+PYTEST_ARGS ?= -v
+COVERAGE_THRESHOLD := 90
 
-$(VENV)/bin/activate: pyproject.toml  ## Create virtual environment
-	uv venv --python $(PYTHON) $(VENV)
-	. $(BIN)/activate
-	touch $(BIN)/activate
+RUN_ARGS ?= --help
 
-venv: $(VENV)/bin/activate  ## Create virtual environment if it doesn't exist
+.PHONY: help
+help: ## Show this help message
+	@echo ''
+	@echo '${YELLOW}Quackvideo Development Guide${RESET}'
+	@echo ''
+	@echo '${YELLOW}Development Workflow:${RESET}'
+	@echo '  1. Setup: ${GREEN}make setup${RESET}    - Full development environment'
+	@echo '  2. Test:  ${GREEN}make test${RESET}     - Run tests with coverage'
+	@echo '  3. Lint:  ${GREEN}make lint${RESET}     - Check code style'
+	@echo '  4. Examples: ${GREEN}make run-examples${RESET} - Run example scripts'
+	@echo ''
+	@echo '${YELLOW}Available Targets:${RESET}'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  ${YELLOW}%-15s${GREEN}%s${RESET}\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ''
 
-install: venv ## Install package (inference only)
+# Development environment targets
+.PHONY: env
+env: ## Create virtual environment using uv
+	@echo "${BLUE}Creating virtual environment...${RESET}"
+	uv venv
+	@echo "${GREEN}Virtual environment created. Activate it with:${RESET}"
+	@echo "source .venv/bin/activate"
+
+.PHONY: install
+install: ## Install package
 	uv pip install -e .
 
-install-train: venv ## Install package with training dependencies
-	uv pip install -e ".[train]"
-
-install-dev: venv ## Install package with development dependencies
+.PHONY: install-dev
+install-dev: ## Install development dependencies
 	uv pip install -e ".[dev]"
 
-install-all: venv ## Install package with all dependencies (train + dev)
+.PHONY: install-all
+install-all: ## Install all dependencies
 	uv pip install -e ".[all]"
 
-test: install-dev ## Run tests with pytest
-	$(BIN)/pytest tests/ -v --cov=src --cov-report=term-missing
+.PHONY: test
+test: install-dev ## Run tests with coverage
+	$(PYTHON) -m pytest $(TEST_PATH) $(PYTEST_ARGS) --cov=src --cov-report=term-missing
 
-lint: install-dev ## Run ruff and mypy
-	$(BIN)/ruff check src/ tests/
-	$(BIN)/ruff format --check src/ tests/
-	$(BIN)/mypy src/ tests/
+# Code quality targets
+.PHONY: format
+format: ## Format code with ruff
+	@echo "${BLUE}Formatting code...${RESET}"
+	$(PYTHON) -m ruff format .
 
-format: install-dev ## Format code using ruff
-	$(BIN)/ruff format src/ tests/
-	$(BIN)/ruff check --fix src/ tests/
+.PHONY: lint
+lint: install-dev ## Run linters
+	$(PYTHON) -m ruff check src/ tests/ examples/
+	$(PYTHON) -m ruff format --check src/ tests/ examples/
+	$(PYTHON) -m mypy src/ tests/ examples/
 
-build: install-dev ## Build package
-	$(BIN)/python -m build
-
-clean: ## Clean up cache and build files
-	rm -rf build/
-	rm -rf dist/
-	rm -rf *.egg-info
-	rm -rf .coverage
-	rm -rf .mypy_cache
-	rm -rf .pytest_cache
-	rm -rf .ruff_cache
+.PHONY: clean
+clean: ## Clean build artifacts and cache
+	rm -rf build/ dist/ *.egg-info .coverage .mypy_cache .pytest_cache .ruff_cache $(VENV_NAME)
+	rm -rf setup.sh
 	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -rf $(VENV)
+	find . -type f -name "*.pyc" -delete
 
-dev: install-all ## Start Jupyter notebook server with all dependencies
-	$(BIN)/jupyter notebook
+.PHONY: update
+update: ## Update all dependencies
+	@echo "${BLUE}Updating dependencies...${RESET}"
+	uv pip install --upgrade -e ".[dev]"
 
-setup: clean install-all ## Clean environment and install all dependencies
-	@echo "Development environment ready!"
+# Setup targets
+.PHONY: setup
+setup: ## Create environment, activate it, and install dependencies (run with 'source make setup')
+	@echo "${BLUE}Creating complete development environment...${RESET}"
+	@echo '#!/bin/bash' > setup.sh
+	@echo 'uv venv' >> setup.sh
+	@echo 'source .venv/bin/activate' >> setup.sh
+	@echo 'uv pip install -e ".[dev]"' >> setup.sh
+	@chmod +x setup.sh
+	@echo "${GREEN}Environment setup script created. To complete setup, run:${RESET}"
+	@echo "${YELLOW}source setup.sh${RESET}"
 
-check: lint test ## Run all checks (lint and test)
-
-# Specialized setup targets
-setup-inference: clean install ## Setup for inference only
-	@echo "Inference environment ready!"
-
-setup-training: clean install-train ## Setup for training
-	@echo "Training environment ready!"
+.PHONY: run-examples
+run-examples: install-dev ## Run example scripts
+	$(PYTHON) examples/synthetic_generation.py --help
+	$(PYTHON) examples/frame_extraction.py --help
+	$(PYTHON) examples/audio_operations.py --help
 
 .PHONY: structure
-structure: ## Show current project structure
+structure: ## Show project structure
 	@echo "${YELLOW}Current Project Structure:${RESET}"
 	@echo "${BLUE}"
 	@if command -v tree > /dev/null; then \
 		tree -a -I '.git|.venv|__pycache__|*.pyc|*.pyo|*.pyd|.pytest_cache|.ruff_cache|.coverage|htmlcov'; \
 	else \
-		echo "Note: Install 'tree' for better directory visualization:"; \
-		echo "  macOS:     brew install tree"; \
-		echo "  Ubuntu:    sudo apt-get install tree"; \
-		echo "  Fedora:    sudo dnf install tree"; \
-		echo ""; \
 		find . -not -path '*/\.*' -not -path '*.pyc' -not -path '*/__pycache__/*' \
 			-not -path './.venv/*' -not -path './build/*' -not -path './dist/*' \
 			-not -path './*.egg-info/*' \
-			| sort \
-			| sed -e "s/[^-][^\/]*\// │   /g" -e "s/├── /│── /" -e "s/└── /└── /"; \
+			| sort | \
+			sed -e "s/[^-][^\/]*\// │   /g" -e "s/├── /│── /" -e "s/└── /└── /"; \
 	fi
 	@echo "${RESET}"
+
+.DEFAULT_GOAL := help

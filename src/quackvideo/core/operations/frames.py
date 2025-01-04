@@ -1,3 +1,4 @@
+# src/quackvideo/core/operations/frames.py
 from __future__ import annotations
 
 import hashlib

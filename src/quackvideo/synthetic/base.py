@@ -1,3 +1,4 @@
+# src/quackvideo/synthetic/base.py
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

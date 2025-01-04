@@ -1,15 +1,14 @@
 # src/quackvideo/core/ffmpeg.py
 from __future__ import annotations
 
-import json
-import subprocess
-from collections.abc import Iterator
-from dataclasses import dataclass
-from io import StringIO
+import logging
 from pathlib import Path
-from threading import Thread
+from typing import Iterator, Optional
 
+import ffmpeg
 import numpy as np
+from pydantic import BaseModel, Field, field_validator
+from tqdm import tqdm
 
 
 class FFmpegError(Exception):
@@ -24,109 +23,104 @@ class FFmpegTimeoutError(FFmpegError):
     pass
 
 
-def stream_reader(pipe, output_buffer, timeout=30):
-    """Read from pipe and write to buffer with timeout."""
-
-    def _read():
-        try:
-            for line in iter(pipe.readline, b""):
-                try:
-                    if isinstance(line, (bytes, bytearray)):
-                        decoded_line = line.decode()
-                    else:
-                        decoded_line = str(line)
-                    output_buffer.write(decoded_line)
-                except (AttributeError, TypeError):
-                    continue
-        finally:
-            pipe.close()
-
-    thread = Thread(target=_read)
-    thread.daemon = True
-    thread.start()
-    thread.join(timeout)
-    if thread.is_alive():
-        raise FFmpegTimeoutError("FFmpeg operation timed out")
-
-
-@dataclass
-class FFmpegCommand:
+class FFmpegCommand(BaseModel):
     """Represents an FFmpeg command with its parameters."""
 
-    input_path: Path
-    output_path: Path | None = None
-    fps: float | None = None
-    start_time: float | None = None
-    end_time: float | None = None
-    resolution: tuple[int, int] | None = None
+    input_path: Path = Field(..., description="Path to input file")
+    output_path: Path | None = Field(None, description="Path to output file")
+    fps: float | None = Field(None, description="Frames per second")
+    start_time: float | None = Field(None, description="Start time in seconds")
+    end_time: float | None = Field(None, description="End time in seconds")
+    resolution: tuple[int, int] | None = Field(
+        None, description="Output resolution (width, height)"
+    )
 
-    def build_command(self) -> list[str]:
-        """Build the FFmpeg command with the specified parameters."""
-        cmd = ["ffmpeg", "-i", str(self.input_path)]
+    @field_validator("fps")
+    def validate_fps(cls, v: float | None) -> float | None:
+        if v is not None and v <= 0:
+            raise ValueError("FPS must be positive")
+        return v
+
+    @field_validator("start_time", "end_time")
+    def validate_time(cls, v: float | None) -> float | None:
+        if v is not None and v < 0:
+            raise ValueError("Time values must be non-negative")
+        return v
+
+    @field_validator("resolution")
+    def validate_resolution(cls, v: tuple[int, int] | None) -> tuple[int, int] | None:
+        if v is not None:
+            width, height = v
+            if width <= 0 or height <= 0:
+                raise ValueError("Resolution dimensions must be positive")
+        return v
+
+    def build_stream(self) -> ffmpeg.Stream:
+        """Build the FFmpeg stream with the specified parameters."""
+        stream = ffmpeg.input(str(self.input_path))
 
         if self.start_time is not None:
-            cmd.extend(["-ss", str(self.start_time)])
+            stream = stream.filter("setpts", f"PTS-{self.start_time}/TB")
 
-        if self.end_time is not None:
-            duration = self.end_time - (self.start_time or 0)
+        if self.fps is not None:
+            stream = stream.filter("fps", fps=self.fps)
+
+        if self.resolution is not None:
+            stream = stream.filter("scale", self.resolution[0], self.resolution[1])
+
+        if self.end_time is not None and self.start_time is not None:
+            duration = self.end_time - self.start_time
             if duration > 0:
-                cmd.extend(["-t", str(duration)])
+                stream = stream.filter("setpts", f"PTS-STARTPTS")
+                stream = stream.filter("trim", duration=duration)
 
-        filters = [
-            f"fps={self.fps}" if self.fps else None,
-            f"scale={self.resolution[0]}:{self.resolution[1]}"
-            if self.resolution
-            else None,
-        ]
-        filters = [f for f in filters if f is not None]
-        if filters:
-            cmd.extend(["-vf", ",".join(filters)])
+        return stream
 
-        if self.output_path is not None:
-            cmd.append(str(self.output_path))
 
-        return cmd
+class VideoInfo(BaseModel):
+    """Video information from probe."""
+
+    width: int = Field(..., description="Video width in pixels")
+    height: int = Field(..., description="Video height in pixels")
+    duration: float = Field(..., description="Video duration in seconds")
+    fps: float = Field(..., description="Video frames per second")
 
 
 class FFmpegWrapper:
-    """High-level wrapper for FFmpeg operations."""
+    """High-level wrapper for FFmpeg operations using ffmpeg-python."""
 
-    TIMEOUT = 10  # Default timeout in seconds
+    TIMEOUT: int = 10  # Default timeout in seconds
 
     @staticmethod
-    def get_video_info(video_path: Path, timeout: int = 10) -> tuple[int, int]:
-        """Get video width and height."""
-        cmd = [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=width,height",
-            "-of",
-            "json",
-            str(video_path),
-        ]
+    def get_video_info(video_path: Path, timeout: int = 10) -> VideoInfo:
+        """Get video information using ffmpeg-python's probe."""
         try:
-            result = subprocess.check_output(cmd, text=True, timeout=timeout)
-            data = json.loads(result)
-            if not data.get("streams"):
-                raise RuntimeError("Failed to get video info: No streams found")
-
-            stream = data["streams"][0]
-            width = stream["width"]
-            height = stream["height"]
-
-            return width, height
-        except subprocess.TimeoutExpired:
-            raise FFmpegTimeoutError("FFprobe operation timed out")
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f"Failed to get video info: {e.stderr if e.stderr else str(e)}"
+            probe = ffmpeg.probe(str(video_path))
+            video_stream = next(
+                (
+                    stream
+                    for stream in probe["streams"]
+                    if stream["codec_type"] == "video"
+                ),
+                None,
             )
-        except (json.JSONDecodeError, KeyError, IndexError) as e:
-            raise RuntimeError(f"Invalid video info format: {str(e)}")
+            if not video_stream:
+                raise FFmpegError("No video stream found")
+
+            # Extract fps from frame rate string (e.g., "24/1")
+            fps_num, fps_den = map(int, video_stream["r_frame_rate"].split("/"))
+            fps = fps_num / fps_den
+
+            return VideoInfo(
+                width=int(video_stream["width"]),
+                height=int(video_stream["height"]),
+                duration=float(probe["format"]["duration"]),
+                fps=fps,
+            )
+        except ffmpeg.Error as e:
+            raise FFmpegError(
+                f"Failed to probe video: {e.stderr.decode() if e.stderr else str(e)}"
+            )
 
     @classmethod
     def extract_frames(
@@ -140,16 +134,15 @@ class FFmpegWrapper:
         skip_validation: bool = False,
         timeout: int = 10,
     ) -> Iterator[np.ndarray]:
-        """Extract video frames."""
+        """Extract video frames using ffmpeg-python."""
         video_path = Path(video_path)
         if not skip_validation and not video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
-        # Get frame dimensions
+        # Get video info
+        video_info = cls.get_video_info(video_path, timeout=timeout)
         width, height = (
-            resolution
-            if resolution
-            else cls.get_video_info(video_path, timeout=timeout)
+            resolution if resolution else (video_info.width, video_info.height)
         )
 
         # Build FFmpeg command
@@ -161,75 +154,56 @@ class FFmpegWrapper:
             resolution=resolution,
         )
 
-        ffmpeg_cmd = cmd.build_command()
-        ffmpeg_cmd.extend(
-            ["-f", "image2pipe", "-pix_fmt", "rgb24", "-vcodec", "rawvideo", "-"]
+        stream = (
+            cmd.build_stream()
+            .output("pipe:", format="rawvideo", pix_fmt="rgb24")
+            .overwrite_output()
         )
 
-        process = None
         try:
-            process = subprocess.Popen(
-                ffmpeg_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=10**8,
-            )
+            process = stream.run_async(pipe_stdout=True, pipe_stderr=True)
 
-            error_output = StringIO()
-            stderr_thread = Thread(
-                target=stream_reader, args=(process.stderr, error_output, timeout)
-            )
-            stderr_thread.daemon = True
-            stderr_thread.start()
+            # Set up progress bar
+            with tqdm(desc="Extracting frames", unit="frame") as pbar:
+                while True:
+                    try:
+                        in_bytes = process.stdout.read(width * height * 3)
+                        if not in_bytes:
+                            break
 
-            def read_with_timeout():
-                result = process.stdout.read(width * height * 3)
-                if not result and process.poll() is not None:
-                    return None
-                return result
+                        frame = np.frombuffer(in_bytes, np.uint8).reshape(
+                            (height, width, 3)
+                        )
+                        pbar.update(1)
+                        yield frame
 
-            while True:
-                # Use threading to implement timeout for read operations
-                read_thread = Thread(target=lambda: read_with_timeout())
-                read_thread.daemon = True
-                read_thread.start()
-                read_thread.join(timeout)
-
-                if read_thread.is_alive():
-                    raise FFmpegTimeoutError("Frame read operation timed out")
-
-                raw_frame = read_with_timeout()
-                if not raw_frame:
-                    break
-
-                frame = np.frombuffer(raw_frame, dtype=np.uint8).reshape(
-                    (height, width, 3)
-                )
-                yield frame
+                    except Exception as e:
+                        process.stdout.close()
+                        process.stderr.close()
+                        process.terminate()
+                        raise FFmpegError(f"Frame extraction failed: {str(e)}")
 
             process.wait(timeout=timeout)
             if process.returncode != 0:
-                raise RuntimeError(
-                    f"Error during frame extraction: {error_output.getvalue()}"
+                error_msg = (
+                    process.stderr.read().decode()
+                    if process.stderr
+                    else "Unknown error"
                 )
+                raise FFmpegError(f"FFmpeg process failed: {error_msg}")
 
-        except (subprocess.TimeoutExpired, FFmpegTimeoutError) as e:
-            raise FFmpegTimeoutError(f"FFmpeg operation timed out: {str(e)}")
+        except Exception as e:
+            raise FFmpegError(f"Frame extraction failed: {str(e)}")
 
         finally:
-            if process:
-                try:
-                    process.stdout.close()
-                    process.stderr.close()
-                    if process.poll() is None:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=1)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                except Exception:
-                    # Ensure process is killed even if cleanup fails
+            try:
+                process.stdout.close()
+                process.stderr.close()
+                if process.poll() is None:
+                    process.terminate()
                     try:
-                        process.kill()
+                        process.wait(timeout=1)
                     except Exception:
-                        pass
+                        process.kill()
+            except Exception:
+                pass

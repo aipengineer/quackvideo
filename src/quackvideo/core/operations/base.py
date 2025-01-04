@@ -1,3 +1,4 @@
+# src/quackvideo/core/operations/base.py
 from __future__ import annotations
 
 import logging

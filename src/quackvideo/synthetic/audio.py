@@ -1,3 +1,4 @@
+# src/quackvideo/synthetic/audio.py
 from __future__ import annotations
 
 from collections.abc import Iterator

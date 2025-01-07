@@ -30,11 +30,27 @@ class FrameExtractionConfig(FFmpegBaseConfig):
     fps: str = Field("1/5", description="Frames per second to extract")
     format: str = Field("png", description="Output format for frames")
     quality: int = Field(100, description="Output quality (1-100)")
+    compatible_formats: dict[str, list[str]] = Field(
+        default={
+            "video": [".mp4", ".mov", ".avi", ".mkv"],
+        },
+        description="Compatible video formats for frame extraction",
+    )
 
     @field_validator("quality")
     def validate_quality(cls, v: int) -> int:
         if not 1 <= v <= 100:
             raise ValueError("Quality must be between 1 and 100")
+        return v
+
+    @field_validator("compatible_formats")
+    def validate_formats(cls, v: dict[str, list[str]]) -> dict[str, list[str]]:
+        if "video" not in v:
+            raise ValueError("Missing video format list")
+        if not isinstance(v["video"], list):
+            raise ValueError("Video formats must be a list")
+        if not all(isinstance(fmt, str) for fmt in v["video"]):
+            raise ValueError("All video formats must be strings")
         return v
 
 

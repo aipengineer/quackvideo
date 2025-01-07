@@ -21,6 +21,8 @@ python synthetic_generation.py audio audio2.flac --pattern chirp --frequency 440
 # Extract frames
 python frame_extraction.py extract video.mp4 --fps "1/5"
 
+python frame_extraction.py extract "path/dir/video.mp4" output_path/dir/dir/ --fps "1/5"
+
 # Audio operations
 python audio_operations.py extract video.mp4
 python audio_operations.py mix audio1.flac audio2.flac

@@ -149,7 +149,7 @@ class FFmpegOperation(ABC, Generic[T, R]):
         """
         self.logger.info(f"Starting {operation_type} operation on {input_path}")
         self.logger.info(f"Media type: {media_type}, Progress desc: {progress_desc}")
-        
+
         self._validate_input_file(input_path, media_type)
         self.logger.info("Input file validation passed")
 
@@ -161,22 +161,29 @@ class FFmpegOperation(ABC, Generic[T, R]):
             operation_type=operation_type,
             output_path=self._get_output_path(input_path, operation_type),
         )
-        self.logger.info(f"Created output metadata: {output_metadata.model_dump_json()}")
+        self.logger.info(
+            f"Created output metadata: {output_metadata.model_dump_json()}"
+        )
 
         last_error = None
         for attempt in range(self.config.retries):
             try:
                 self.logger.info(f"Attempt {attempt + 1}/{self.config.retries}")
-                
+
                 # Build FFmpeg stream
                 stream = self._build_ffmpeg_stream(input_path)
                 cmd = ffmpeg.compile(stream)
-                self.logger.info(f"FFmpeg command for attempt {attempt + 1}: {' '.join(cmd)}")
-                
+                self.logger.info(
+                    f"FFmpeg command for attempt {attempt + 1}: {' '.join(cmd)}"
+                )
+
                 # Create progress bar
-                with tqdm(total=self._total_frames, desc=progress_desc, unit="frames") as pbar:
+                with tqdm(
+                    total=self._total_frames, desc=progress_desc, unit="frames"
+                ) as pbar:
+
                     def on_progress(progress: dict[str, Any]) -> None:
-                        if 'frame' in progress:
+                        if "frame" in progress:
                             pbar.update(1)
                             pbar.refresh()
 
@@ -189,7 +196,7 @@ class FFmpegOperation(ABC, Generic[T, R]):
                             overwrite_output=True,
                         )
                         self.logger.info("FFmpeg operation completed successfully")
-                        
+
                     except ffmpeg.Error as e:
                         stderr = e.stderr.decode() if e.stderr else "No stderr"
                         stdout = e.stdout.decode() if e.stdout else "No stdout"
@@ -207,14 +214,16 @@ class FFmpegOperation(ABC, Generic[T, R]):
                 stderr = e.stderr.decode() if e.stderr else "No stderr"
                 last_error = FFmpegOperationError(
                     f"FFmpeg operation failed on attempt {attempt + 1}/{self.config.retries}",
-                    ffmpeg_error=stderr
+                    ffmpeg_error=stderr,
                 )
                 self.logger.error(f"Attempt {attempt + 1} failed with FFmpeg error:")
                 self.logger.error(f"Error message: {last_error}")
                 self.logger.error(f"FFmpeg stderr: {stderr}")
 
                 if attempt < self.config.retries - 1:
-                    self.logger.info(f"Waiting {self.config.retry_delay}s before next attempt")
+                    self.logger.info(
+                        f"Waiting {self.config.retry_delay}s before next attempt"
+                    )
                     time.sleep(self.config.retry_delay)
                 continue
 
@@ -227,7 +236,9 @@ class FFmpegOperation(ABC, Generic[T, R]):
 
         metadata.status = "failed"
         self._create_metadata_file(metadata)
-        raise last_error or FFmpegOperationError("Operation failed with no specific error")
+        raise last_error or FFmpegOperationError(
+            "Operation failed with no specific error"
+        )
 
     def cleanup(self) -> None:
         """Clean up any temporary files or resources."""

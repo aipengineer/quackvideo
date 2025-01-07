@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from pathlib import Path
+import math
 
-import shlex
 import ffmpeg
 from tqdm import tqdm
 from pydantic import BaseModel
@@ -94,10 +95,9 @@ class FrameExtractor(FFmpegOperation[FrameExtractionConfig, FrameExtractionResul
     def _build_ffmpeg_stream(self, input_path: Path) -> ffmpeg.Stream:
         """Build FFmpeg stream for frame extraction."""
         try:
-            # Convert to absolute path and check existence
             input_path = input_path.absolute()
             print(f"Processing input path: {input_path}")
-            
+
             if not input_path.exists():
                 raise FileNotFoundError(f"Input file not found: {input_path}")
 
@@ -105,65 +105,84 @@ class FrameExtractor(FFmpegOperation[FrameExtractionConfig, FrameExtractionResul
             probe = ffmpeg.probe(str(input_path))
             video_info = next(s for s in probe["streams"] if s["codec_type"] == "video")
 
-            try:
-                self._total_frames = int(video_info["nb_frames"])
-            except KeyError:
-                duration = float(video_info["duration"])
-                if "/" in self.config.fps:
-                    num, den = map(int, self.config.fps.split("/"))
-                    fps = num / den
-                else:
-                    fps = float(self.config.fps)
-                self._total_frames = int(duration * fps)
+            # Get the original video fps and duration
+            duration = float(video_info["duration"])
+            original_fps = 0
+            if "r_frame_rate" in video_info:
+                num, den = map(int, video_info["r_frame_rate"].split("/"))
+                original_fps = num / den
+            elif "avg_frame_rate" in video_info:
+                num, den = map(int, video_info["avg_frame_rate"].split("/"))
+                original_fps = num / den if den != 0 else 0
 
-            print(f"Calculated total frames: {self._total_frames}")
+            print(f"Original video: duration={duration}s, fps={original_fps}")
+
+            # Calculate target fps and total frames
+            if "/" in self.config.fps:
+                num, den = map(int, self.config.fps.split("/"))
+                target_fps = num / den
+            else:
+                target_fps = float(self.config.fps)
+
+            # Use ceil to ensure we get all frames
+            self._total_frames = math.ceil(duration * target_fps)
+            total_original_frames = math.ceil(duration * original_fps)
+
+            print(
+                f"Frame extraction: target_fps={target_fps}, total_frames={self._total_frames} "
+                f"(from {total_original_frames} original frames)"
+            )
 
             # Create a frames directory without spaces
-            safe_output_dir = self._output_dir.parent / self._output_dir.name.replace(" ", "_")
+            safe_output_dir = self._output_dir.parent / self._output_dir.name.replace(
+                " ", "_"
+            )
             if safe_output_dir != self._output_dir:
                 print(f"Creating safe output directory: {safe_output_dir}")
                 if self._output_dir.exists():
                     self._output_dir.rename(safe_output_dir)
                 self._output_dir = safe_output_dir
 
-            # Build the ffmpeg command
-            stream = (
-                ffmpeg
-                .input(str(input_path))
-                .output(
-                    str(self._output_dir / f"frame_%04d.{self.config.format}"),
-                    vf=f'fps={self.config.fps}',
-                    **self._get_output_options()
-                )
+            # Build the ffmpeg command with progress
+            stream = ffmpeg.input(str(input_path)).output(
+                str(self._output_dir / f"frame_%04d.{self.config.format}"),
+                vf=f"fps={self.config.fps}",
+                progress="-",  # Enable progress output
+                **self._get_output_options(),
             )
-                
-            # Print the compiled command for debugging
-            cmd = ffmpeg.compile(stream)
-            print(f"FFmpeg command: {' '.join(cmd)}")
-            
+
+            print(f"FFmpeg command: {' '.join(ffmpeg.compile(stream))}")
             return stream
 
         except Exception as e:
             print(f"Error in _build_ffmpeg_stream: {str(e)}")
-            if hasattr(e, 'stderr'):
-                print(f"FFmpeg stderr: {e.stderr.decode() if e.stderr else 'No stderr'}")
+            if hasattr(e, "stderr"):
+                print(
+                    f"FFmpeg stderr: {e.stderr.decode() if e.stderr else 'No stderr'}"
+                )
             raise
 
     def _get_output_options(self) -> dict:
         """Get output options based on format."""
-        options = {'y': None}  # Add -y to overwrite files
-        
+        options = {"y": None}  # Add -y to overwrite files
+
         if self.config.format == "png":
-            options.update({
-                'vcodec': 'png',
-                'compression_level': str(int((100 - self.config.quality) / 100 * 9))
-            })
+            options.update(
+                {
+                    "vcodec": "png",
+                    "compression_level": str(
+                        int((100 - self.config.quality) / 100 * 9)
+                    ),
+                }
+            )
         elif self.config.format in ["jpg", "jpeg"]:
-            options.update({
-                'vcodec': 'mjpeg',
-                'q:v': str(int((100 - self.config.quality) / 100 * 31))
-            })
-            
+            options.update(
+                {
+                    "vcodec": "mjpeg",
+                    "q:v": str(int((100 - self.config.quality) / 100 * 31)),
+                }
+            )
+
         return options
 
     def _process_output(
@@ -208,64 +227,114 @@ class FrameExtractor(FFmpegOperation[FrameExtractionConfig, FrameExtractionResul
         """Extract frames from a video file."""
         print(f"Starting frame extraction for: {video_path}")
         video_path = Path(video_path).resolve()
-        
+
         try:
-            # Create output directory
             self._output_dir = self._create_output_directory(video_path)
             print(f"Output directory: {self._output_dir}")
 
-            # Build the ffmpeg stream
+            # Load existing metadata if resuming
+            metadata_file = self.episode_dir / ".metadata.json"
+            metadata = ProcessingMetadata()
+
+            if resume and metadata_file.exists():
+                print("Found existing metadata, checking for valid frames...")
+                metadata = ProcessingMetadata.model_validate_json(
+                    metadata_file.read_text()
+                )
+                valid_frames = self._verify_existing_frames(self._output_dir, metadata)
+                if valid_frames:
+                    print(f"Found {len(valid_frames)} valid frames to resume from")
+
+            # Build and run ffmpeg stream
             stream = self._build_ffmpeg_stream(video_path)
-            
-            # Run ffmpeg with progress monitoring
+
             try:
-                current_frame = 0
-                with tqdm(total=self._total_frames, desc="Extracting frames", unit="frames") as pbar:
-                    process = (
-                        ffmpeg
-                        .run_async(stream, pipe_stderr=True, overwrite_output=True)
+                with tqdm(
+                    total=self._total_frames, desc="Extracting frames", unit="frames"
+                ) as pbar:
+                    # Start ffmpeg process with suppressed output
+                    process = ffmpeg.run_async(
+                        stream,
+                        pipe_stderr=True,
+                        pipe_stdout=True,
+                        overwrite_output=True,
                     )
-                    
-                    # Count existing frames periodically to show progress
-                    while process.poll() is None:  # While process is running
-                        # Count actual frames written
-                        frame_count = len(list(self._output_dir.glob(f"frame_*.{self.config.format}")))
-                        if frame_count > current_frame:
-                            pbar.update(frame_count - current_frame)
-                            current_frame = frame_count
-                            pbar.set_postfix({'saved': frame_count})
-                    
+
+                    last_count = 0
+                    last_update = time.time()
+
+                    # Monitor progress by counting files
+                    while process.poll() is None:
+                        current_time = time.time()
+
+                        # Update progress every 100ms
+                        if current_time - last_update >= 0.1:
+                            current_count = len(
+                                list(
+                                    self._output_dir.glob(
+                                        f"frame_*.{self.config.format}"
+                                    )
+                                )
+                            )
+                            if current_count > last_count:
+                                pbar.update(current_count - last_count)
+                                last_count = current_count
+
+                                # Update metadata
+                                metadata.completed_frames = current_count
+                                metadata.status = "in_progress"
+                                self._create_metadata_file(metadata)
+
+                            last_update = current_time
+
+                        time.sleep(0.1)  # Short sleep to prevent CPU thrashing
+
+                    # Check if process completed successfully
                     if process.returncode != 0:
+                        stderr = (
+                            process.stderr.read().decode("utf-8")
+                            if process.stderr
+                            else "No error output"
+                        )
                         raise FFmpegOperationError(
-                            f"FFmpeg process failed with return code {process.returncode}"
+                            f"FFmpeg process failed with return code {process.returncode}\n{stderr}"
                         )
 
-                    # Final frame count update
-                    final_count = len(list(self._output_dir.glob(f"frame_*.{self.config.format}")))
-                    if final_count > current_frame:
-                        pbar.update(final_count - current_frame)
-                        pbar.set_postfix({'saved': final_count})
+                    # Final file counting and metadata
+                    frame_files = {}
+                    for frame_path in sorted(
+                        self._output_dir.glob(f"frame_*.{self.config.format}")
+                    ):
+                        frame_hash = self._calculate_frame_hash(frame_path)
+                        frame_files[frame_path.name] = frame_hash
 
-                # Check the output files
-                frame_files = {}
-                for frame_path in sorted(self._output_dir.glob(f"frame_*.{self.config.format}")):
-                    frame_files[frame_path.name] = self._calculate_frame_hash(frame_path)
-                    
-                print(f"Successfully extracted {len(frame_files)} frames")
-                
-                return FrameExtractionResult(
-                    total_frames=len(frame_files),
-                    output_directory=self._output_dir,
-                    frame_files=frame_files
-                )
+                    final_count = len(frame_files)
+                    if final_count > last_count:
+                        pbar.update(final_count - last_count)
+
+                    metadata.total_frames = final_count
+                    metadata.completed_frames = final_count
+                    metadata.status = "completed"
+                    metadata.frame_integrity = frame_files
+                    self._create_metadata_file(metadata)
+
+                    print(f"\nSuccessfully extracted {final_count} frames")
+
+                    return FrameExtractionResult(
+                        total_frames=final_count,
+                        output_directory=self._output_dir,
+                        frame_files=frame_files,
+                    )
 
             except ffmpeg.Error as e:
-                stderr = e.stderr.decode('utf-8') if e.stderr else 'No stderr'
+                stderr = e.stderr.decode("utf-8") if e.stderr else "No stderr"
                 print(f"FFmpeg error: {stderr}")
+                metadata.status = "failed"
+                self._create_metadata_file(metadata)
                 raise FFmpegOperationError(f"FFmpeg operation failed: {stderr}")
-                    
+
         except Exception as e:
             print(f"Error during frame extraction: {str(e)}")
-            if hasattr(e, '__dict__'):
+            if hasattr(e, "__dict__"):
                 print(f"Error details: {e.__dict__}")
             raise

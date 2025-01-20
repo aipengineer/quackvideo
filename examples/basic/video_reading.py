@@ -30,7 +30,7 @@ def read_video_basic(
         print(f"Resolution: {reader.metadata.width}x{reader.metadata.height}")
         print(f"Codec: {reader.metadata.codec}")
         print(f"Bitrate: {reader.metadata.bitrate} bps")
-        print(f"Size: {reader.metadata.size_bytes / (1024*1024):.2f} MB")
+        print(f"Size: {reader.metadata.size_bytes / (1024 * 1024):.2f} MB")
 
     # Read and process frames
     print("\nReading frames...")

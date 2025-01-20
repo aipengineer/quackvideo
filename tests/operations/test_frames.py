@@ -21,9 +21,9 @@ def test_extract_frames_basic(temp_output_dir, small_synth_video):
     )
     frame_files = list(frames_dir.glob("frame_*.png"))
 
-    assert (
-        len(frame_files) == num_extracted
-    ), "Number of extracted frames should match return value."
+    assert len(frame_files) == num_extracted, (
+        "Number of extracted frames should match return value."
+    )
     for frame_file in frame_files:
         assert frame_file.stat().st_size > 0, f"{frame_file.name} should not be empty."
 

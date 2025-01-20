@@ -37,9 +37,9 @@ def test_run_ffmpeg_process_success(temp_output_dir, small_synth_video):
     )
     result = run_ffmpeg_process(cmd)
     assert result == 0, "FFmpeg process should return 0 on success."
-    assert (
-        out_file.exists() and os.path.getsize(out_file) > 0
-    ), "Output file should be created."
+    assert out_file.exists() and os.path.getsize(out_file) > 0, (
+        "Output file should be created."
+    )
 
 
 def test_run_ffmpeg_process_failure():

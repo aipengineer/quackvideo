@@ -1,19 +1,32 @@
 #!/bin/bash
 
-# Check if the directory path is provided
+# Check if the top-level directory is provided
 if [ -z "$1" ]; then
-  echo "Usage: $0 <directory_path>"
+  echo "Usage: $0 <base_directory>"
   exit 1
 fi
 
-# Get the directory path from the first argument
-INPUT_DIRECTORY="$1"
+# Set the base directory
+BASE_DIR="$1"
 
-# Check if the provided path is a valid directory
-if [ ! -d "$INPUT_DIRECTORY" ]; then
-  echo "Error: $INPUT_DIRECTORY is not a valid directory."
+# Define the video directory and the parent directory for frames output
+VIDEO_DIR="$BASE_DIR/raw/video"
+OUTPUT_PARENT="$BASE_DIR/edited"  # Pass the parent of "frames" to avoid duplication
+
+# Verify that the base directory exists
+if [ ! -d "$BASE_DIR" ]; then
+  echo "Error: $BASE_DIR is not a valid directory."
   exit 1
 fi
+
+# Verify that the video directory exists
+if [ ! -d "$VIDEO_DIR" ]; then
+  echo "Error: $VIDEO_DIR is not a valid directory."
+  exit 1
+fi
+
+# Create the output parent directory if it doesn't exist
+mkdir -p "$OUTPUT_PARENT"
 
 # Python script path
 PYTHON_SCRIPT="examples/frame_extraction.py"
@@ -24,25 +37,25 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
   exit 1
 fi
 
-# Iterate over all .mp4 files in the input directory
-for input_file in "$INPUT_DIRECTORY"/*.mp4; do
+# Iterate over all .mp4 files in the video directory
+for input_file in "$VIDEO_DIR"/*.mp4; do
   # Skip if no .mp4 files are found
   if [ ! -e "$input_file" ]; then
-    echo "No .mp4 files found in $INPUT_DIRECTORY."
+    echo "No .mp4 files found in $VIDEO_DIR."
     exit 0
   fi
 
-  # Deduce the output directory by replacing /raw/video/ with /edited/
-  output_directory=$(echo "$input_file" | sed 's|/raw/video/|/edited/|')
-  output_directory=$(dirname "$output_directory")
+  # Extract the base name without the extension
+  base=$(basename "$input_file" .mp4)
 
-  # Ensure the output directory exists
-  mkdir -p "$output_directory"
+  # Pass the parent output directory. The Python script is expected to create its own "frames" folder,
+  # resulting in the final output path: <BASE_DIR>/edited/frames/<video_base>
+  output_directory="$OUTPUT_PARENT"
 
   # Execute the Python script with the input and output paths
   python "$PYTHON_SCRIPT" extract "$input_file" "$output_directory" --fps "1/5"
 
-  echo "Processed: $input_file -> $output_directory"
+  echo "Processed: $input_file -> (output in ${output_directory}/frames/$base)"
 done
 
 echo "Frame extraction complete."

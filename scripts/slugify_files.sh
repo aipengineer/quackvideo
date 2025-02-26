@@ -1,17 +1,17 @@
 #!/bin/bash
 
-# Check if the directory path is provided
+# Check if the base directory is provided
 if [ -z "$1" ]; then
   echo "Usage: $0 <directory_path>"
   exit 1
 fi
 
-# Get the directory path from the first argument
-DIRECTORY="$1"
+# Get the base directory from the first argument
+BASE_DIR="$1"
 
-# Check if the provided path is a valid directory
-if [ ! -d "$DIRECTORY" ]; then
-  echo "Error: $DIRECTORY is not a valid directory."
+# Verify that the provided path is a valid directory
+if [ ! -d "$BASE_DIR" ]; then
+  echo "Error: $BASE_DIR is not a valid directory."
   exit 1
 fi
 
@@ -19,32 +19,34 @@ fi
 slugify() {
   local filename="$1"
   # Replace spaces with underscores, convert to lowercase, and remove special characters
-  echo "$filename" |\
+  echo "$filename" | \
     tr '[:upper:]' '[:lower:]' | \
     sed -E 's/[^a-z0-9._-]+/_/g' | \
     sed -E 's/_+/_/g' | \
     sed -E 's/^_|_$//g'
 }
 
-# Iterate over all files in the directory
-for file in "$DIRECTORY"/*; do
-  # Skip if not a file
-  if [ ! -f "$file" ]; then
-    continue
-  fi
-
+# Recursively find all files in BASE_DIR and process them
+find "$BASE_DIR" -type f -print0 | while IFS= read -r -d '' file; do
   # Get the base name of the file
   base_name="$(basename "$file")"
-
+  
   # Generate the slugified name
   slugified_name="$(slugify "$base_name")"
-
-  # If the slugified name is different, rename the file
+  
+  # If the slugified name differs from the original, rename the file
   if [ "$base_name" != "$slugified_name" ]; then
-    mv "$file" "$DIRECTORY/$slugified_name"
-    echo "Renamed: $base_name -> $slugified_name"
+    file_dir="$(dirname "$file")"
+    new_path="$file_dir/$slugified_name"
+    
+    # Check if a file with the new name already exists to avoid overwriting
+    if [ -e "$new_path" ]; then
+      echo "Skipping: $file (target $new_path already exists)"
+    else
+      mv "$file" "$new_path"
+      echo "Renamed: $file -> $new_path"
+    fi
   fi
-
 done
 
 echo "Slugification complete."

@@ -22,16 +22,12 @@ if [ ! -d "$AUDIO_DIR" ]; then
   mkdir -p "$AUDIO_DIR"
 fi
 
-# Iterate over all .mp4 files in the VIDEO directory
-for file in "$VIDEO_DIR"/*.mp4; do
-  # Skip if no .mp4 files are found
-  if [ ! -e "$file" ]; then
-    echo "No .mp4 files found in $VIDEO_DIR."
-    exit 0
-  fi
-
-  # Extract the base name without the .mp4 extension
-  base=$(basename "$file" .mp4)
+# Iterate over all .mp4 or .MP4 files in the VIDEO directory
+shopt -s nullglob  # Avoid literal pattern if no files found
+for file in "$VIDEO_DIR"/*.[mM][pP]4; do
+  # If no files match, this loop won't run due to nullglob
+  filename=$(basename "$file")
+  base="${filename%.*}"
   
   # Construct the output file path in the AUDIO directory
   output="$AUDIO_DIR/${base}.flac"
@@ -42,4 +38,9 @@ for file in "$VIDEO_DIR"/*.mp4; do
   echo "Processed: $file -> $output"
 done
 
-echo "Audio extraction complete."
+# Check if no files were processed
+if compgen -G "$VIDEO_DIR/*.[mM][pP]4" > /dev/null; then
+  echo "Audio extraction complete."
+else
+  echo "No .mp4 or .MP4 files found in $VIDEO_DIR."
+fi

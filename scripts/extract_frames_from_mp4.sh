@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Check if the top-level directory is provided
+# Check if the base directory is provided
 if [ -z "$1" ]; then
   echo "Usage: $0 <base_directory>"
   exit 1
@@ -37,18 +37,18 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
   exit 1
 fi
 
-# Iterate over all .mp4 files in the video directory
-for input_file in "$VIDEO_DIR"/*.mp4; do
-  # Skip if no .mp4 files are found
-  if [ ! -e "$input_file" ]; then
-    echo "No .mp4 files found in $VIDEO_DIR."
-    exit 0
-  fi
+# Enable nullglob so that non-matching patterns expand to nothing
+shopt -s nullglob
 
+files_found=0
+# Iterate over all .mp4 or .MP4 files in the video directory
+for input_file in "$VIDEO_DIR"/*.[mM][pP]4; do
+  files_found=1
   # Extract the base name without the extension
-  base=$(basename "$input_file" .mp4)
+  filename=$(basename "$input_file")
+  base="${filename%.*}"
 
-  # Pass the parent output directory. The Python script is expected to create its own "frames" folder,
+  # The Python script is expected to create its own "frames" folder inside the output parent,
   # resulting in the final output path: <BASE_DIR>/edited/frames/<video_base>
   output_directory="$OUTPUT_PARENT"
 
@@ -57,5 +57,11 @@ for input_file in "$VIDEO_DIR"/*.mp4; do
 
   echo "Processed: $input_file -> (output in ${output_directory}/frames/$base)"
 done
+
+# If no files were processed, output a message and exit
+if [ $files_found -eq 0 ]; then
+  echo "No .mp4 or .MP4 files found in $VIDEO_DIR."
+  exit 0
+fi
 
 echo "Frame extraction complete."
